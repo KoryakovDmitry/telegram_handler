@@ -91,7 +91,7 @@ class TelegramLoggingHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         message = self.format(record)
-        self._buffer.write(f"{message}\n")
+        self._buffer.write(f"{message}.\n")
 
     def close(self):
         with self._stop_signal:
