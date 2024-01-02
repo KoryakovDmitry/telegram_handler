@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "telegram-handler"
 dependencies = [
-  'requests ~= 2.25.0', 
-  'retry ~= 0.9.0'
+  'requests ~= 2.31.0',
+  'retry ~= 0.9.2'
 ]
 
-version = "1.4.4"
+version = "1.4.5"
 authors = [
-  {name="Guyshe"},
+  {name="Guyshe,Dmitrii"},
 ]
 description = "Small package for working with config files"
 readme = "README.md"
@@ -23,4 +23,4 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/guyshe/telegram_handler"
+"Homepage" = "https://github.com/KoryakovDmitry/telegram_handler.git"
