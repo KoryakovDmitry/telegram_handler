@@ -5,18 +5,21 @@ import requests
 from threading import Thread, RLock
 from retry import retry
 from telegram_handler.buffer import MessageBuffer
-from telegram_handler.consts import API_URL, RETRY_COOLDOWN_TIME, MAX_RETRYS, \
-    MAX_MESSAGE_SIZE, FLUSH_INTERVAL, RETRY_BACKOFF_TIME, MAX_BUFFER_SIZE
+from telegram_handler.consts import (
+    API_URL,
+    RETRY_COOLDOWN_TIME,
+    MAX_RETRYS,
+    MAX_MESSAGE_SIZE,
+    FLUSH_INTERVAL,
+    RETRY_BACKOFF_TIME,
+    MAX_BUFFER_SIZE,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class TelegramLoggingHandler(logging.Handler):
-
-    def __init__(self,
-                 bot_token: str,
-                 channel: Union[str, int],
-                 level=logging.NOTSET):
+    def __init__(self, bot_token: str, channel: Union[str, int], level=logging.NOTSET):
         super().__init__(level)
         self._url = TelegramLoggingHandler._format_url(bot_token, channel)
         self._buffer = MessageBuffer(MAX_BUFFER_SIZE)
@@ -28,17 +31,18 @@ class TelegramLoggingHandler(logging.Handler):
     def _format_url(bot_token: str, channel: Union[str, int]):
         formatted_channel = channel
         if isinstance(channel, str):
-            formatted_channel = f'@{channel}'
-        return API_URL.format(bot_token=bot_token,
-                              channel_name=formatted_channel)
+            formatted_channel = f"@{channel}"
+        return API_URL.format(bot_token=bot_token, channel_name=formatted_channel)
 
-    @retry(requests.exceptions.RequestException,
-           tries=MAX_RETRYS,
-           delay=RETRY_COOLDOWN_TIME,
-           backoff=RETRY_BACKOFF_TIME,
-           logger=logger)
+    @retry(
+        requests.exceptions.RequestException,
+        tries=MAX_RETRYS,
+        delay=RETRY_COOLDOWN_TIME,
+        backoff=RETRY_BACKOFF_TIME,
+        logger=logger,
+    )
     def write(self, message):
-        response = requests.post(self._url, data={'text': message})
+        response = requests.post(self._url, data={"text": message})
 
         response.raise_for_status()
         if response.status_code == requests.codes.too_many_requests:
@@ -46,7 +50,7 @@ class TelegramLoggingHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         message = self.format(record)
-        self._buffer.write(f'{message}\n')
+        self._buffer.write(f"{message}\n")
 
     def close(self):
         with self._stop_signal:
@@ -63,7 +67,7 @@ class TelegramLoggingHandler(logging.Handler):
 
             sleep(FLUSH_INTERVAL)
             message = self._buffer.read(MAX_MESSAGE_SIZE)
-            if message != '':
+            if message != "":
                 self.write(message)
 
     def _start_writer_thread(self):
