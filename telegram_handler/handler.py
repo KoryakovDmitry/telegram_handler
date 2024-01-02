@@ -18,7 +18,9 @@ from telegram_handler.consts import (
 logger = logging.getLogger(__name__)
 
 
-class TelegramLoggingHandler(logging.Handler):
+class TelegramFormatter(logging.Formatter):
+    """TelegramFormatter."""
+
     EMOJI_MAP = {
         logging.DEBUG: "DEBUG: \u26aa",
         logging.INFO: "INFO: \U0001f535",
@@ -29,18 +31,17 @@ class TelegramLoggingHandler(logging.Handler):
 
     def __init__(
         self,
-        bot_token: str,
-        channel: Union[str, int],
-        level=logging.NOTSET,
+        fmt: str = "%(asctime)s - %(levelname)s - %(message)s",
+        datefmt: str = None,
         use_emoji: bool = True,
         emoji_map: dict = None,
     ):
-        super().__init__(level)
-        self._url = TelegramLoggingHandler._format_url(bot_token, channel)
-        self._buffer = MessageBuffer(MAX_BUFFER_SIZE)
-        self._stop_signal = RLock()
-        self._writer_thread = None
-        self._start_writer_thread()
+        """:fmt: str, default: '%(asctime)s - %(levelname)s - %(message)s'\n
+        :datefmt: str, default: None\n
+        :use_emoji: bool, default: True\n
+        :emoji_map: dict, default: None\n
+        """
+        super().__init__(fmt, datefmt)
         self.use_emoji = use_emoji
         self.emojis = self.EMOJI_MAP
         if emoji_map:
@@ -51,12 +52,25 @@ class TelegramLoggingHandler(logging.Handler):
             record.levelname = self.emojis[record.levelno]
         return super().format(record)
 
+
+class TelegramLoggingHandler(logging.Handler):
+    def __init__(
+        self,
+        bot_token: str,
+        channel: Union[str, int],
+        level=logging.NOTSET,
+    ):
+        super().__init__(level)
+        self.chat_id = channel
+        self._url = TelegramLoggingHandler._format_url(bot_token)
+        self._buffer = MessageBuffer(MAX_BUFFER_SIZE)
+        self._stop_signal = RLock()
+        self._writer_thread = None
+        self._start_writer_thread()
+
     @staticmethod
-    def _format_url(bot_token: str, channel: Union[str, int]):
-        formatted_channel = channel
-        if isinstance(channel, str):
-            formatted_channel = f"@{channel}"
-        return API_URL.format(bot_token=bot_token, channel_name=formatted_channel)
+    def _format_url(bot_token: str):
+        return API_URL.format(bot_token=bot_token)
 
     @retry(
         requests.exceptions.RequestException,
@@ -66,7 +80,10 @@ class TelegramLoggingHandler(logging.Handler):
         logger=logger,
     )
     def write(self, message):
-        response = requests.post(self._url, data={"text": message})
+        response = requests.post(
+            self._url,
+            data={"text": message, "chat_id": self.chat_id, "parse_mode": "HTML"},
+        )
 
         response.raise_for_status()
         if response.status_code == requests.codes.too_many_requests:

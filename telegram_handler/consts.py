@@ -2,8 +2,7 @@ FLUSH_INTERVAL = 5
 
 API_HOST = "api.telegram.org"
 API_URL = (
-    f"https://{API_HOST}/bot{{bot_token}}/sendMessage?"
-    f"chat_id={{channel_name}}&parse_mode=HTML"
+    f"https://{API_HOST}/bot{{bot_token}}/sendMessage"
 )
 RETRY_COOLDOWN_TIME = 60
 MAX_RETRYS = 20
