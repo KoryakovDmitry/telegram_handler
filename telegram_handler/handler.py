@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from threading import Thread, Event
 from time import sleep
@@ -71,9 +72,15 @@ class TelegramLoggingHandler(logging.Handler):
             message = self._buffer.read(MAX_MESSAGE_SIZE)
             if message:
                 try:
-                    self.bot.send_message(chat_id=self.chat_id, text=message, parse_mode='HTML')
+                    asyncio.run(self.async_send_message(message))
                 except TelegramError as e:
                     logging.error(f"Failed to send message: {e}")
+
+    async def async_send_message(self, message):
+        try:
+            await self.bot.send_message(chat_id=self.chat_id, text=message, parse_mode='HTML')
+        except Exception as e:
+            logging.error(f"Failed to send message: {e}")
 
     def close(self):
         self._stop_event.set()
