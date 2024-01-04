@@ -1,18 +1,24 @@
-from threading import RLock
+from threading import Event
 
 
 class MessageBuffer:
-    def __init__(self, max_size: int = None):
-        self._lock = RLock()
-        self._buffer = ""
-        self._max_size = max_size
+    """Buffer for storing and managing log messages."""
 
-    def write(self, message: str):
-        with self._lock:
-            self._buffer = "".join([self._buffer, message])[: self._max_size]
+    def __init__(self, max_size):
+        self.max_size = max_size
+        self.buffer = ""
+        self.lock = Event()
 
-    def read(self, count: int):
-        result = ""
-        with self._lock:
-            result, self._buffer = self._buffer[:count], self._buffer[count:]
-        return result
+    def write(self, message):
+        if len(self.buffer) + len(message) <= self.max_size:
+            self.buffer += message
+        else:
+            self.flush()
+
+    def read(self, size):
+        message = self.buffer[:size]
+        self.buffer = self.buffer[size:]
+        return message
+
+    def flush(self):
+        self.buffer = ""

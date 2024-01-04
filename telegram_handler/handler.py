@@ -1,17 +1,13 @@
-from typing import Union
 import logging
+from threading import Thread, Event
 from time import sleep
-import requests
-from threading import Thread, RLock
-from retry import retry
+
+from telegram import Bot
+from telegram.error import TelegramError
 from telegram_handler.buffer import MessageBuffer
 from telegram_handler.consts import (
-    API_URL,
-    RETRY_COOLDOWN_TIME,
-    MAX_RETRYS,
     MAX_MESSAGE_SIZE,
     FLUSH_INTERVAL,
-    RETRY_BACKOFF_TIME,
     MAX_BUFFER_SIZE,
 )
 
@@ -54,64 +50,32 @@ class TelegramFormatter(logging.Formatter):
 
 
 class TelegramLoggingHandler(logging.Handler):
-    def __init__(
-        self,
-        bot_token: str,
-        channel: Union[str, int],
-        level=logging.NOTSET,
-    ):
+    """Logging handler that sends messages to a Telegram chat."""
+
+    def __init__(self, bot_token, chat_id, level=logging.NOTSET):
         super().__init__(level)
-        self.chat_id = channel
-        self._url = TelegramLoggingHandler._format_url(bot_token)
+        self.bot = Bot(bot_token)
+        self.chat_id = chat_id
         self._buffer = MessageBuffer(MAX_BUFFER_SIZE)
-        self._stop_signal = RLock()
-        self._writer_thread = None
-        self._start_writer_thread()
+        self._stop_event = Event()
+        self._writer_thread = Thread(target=self._write_manager, daemon=True)
+        self._writer_thread.start()
 
-    @staticmethod
-    def _format_url(bot_token: str):
-        return API_URL.format(bot_token=bot_token)
-
-    @retry(
-        requests.exceptions.RequestException,
-        tries=MAX_RETRYS,
-        delay=RETRY_COOLDOWN_TIME,
-        backoff=RETRY_BACKOFF_TIME,
-        logger=logger,
-    )
-    def write(self, message):
-        response = requests.post(
-            self._url,
-            data={"text": message, "chat_id": self.chat_id, "parse_mode": "HTML"},
-        )
-
-        response.raise_for_status()
-        if response.status_code == requests.codes.too_many_requests:
-            raise requests.exceptions.RequestException("Too many requests")
-
-    def emit(self, record: logging.LogRecord) -> None:
+    def emit(self, record):
         message = self.format(record)
-        self._buffer.write(f"{message}.\n")
-
-    def close(self):
-        with self._stop_signal:
-            self._writer_thread.join()
+        self._buffer.write(f"{message}\n")
 
     def _write_manager(self):
-        while True:
-            # as long as we can aquire the lock, we can continue
-            lock_status = self._stop_signal.acquire(blocking=False)
-            if not lock_status:
-                break
-            else:
-                self._stop_signal.release()
-
+        while not self._stop_event.is_set():
             sleep(FLUSH_INTERVAL)
             message = self._buffer.read(MAX_MESSAGE_SIZE)
-            if message != "":
-                self.write(message)
+            if message:
+                try:
+                    self.bot.send_message(chat_id=self.chat_id, text=message, parse_mode='HTML')
+                except TelegramError as e:
+                    logging.error(f"Failed to send message: {e}")
 
-    def _start_writer_thread(self):
-        self._writer_thread = Thread(target=self._write_manager)
-        self._writer_thread.daemon = True
-        self._writer_thread.start()
+    def close(self):
+        self._stop_event.set()
+        self._writer_thread.join()
+        super().close()
