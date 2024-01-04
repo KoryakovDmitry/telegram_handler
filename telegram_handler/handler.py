@@ -3,8 +3,11 @@ import logging
 from threading import Thread, Event
 from time import sleep
 
-from telegram import Bot
 from telegram.error import TelegramError
+from telegram.ext import (
+    ApplicationBuilder,
+    AIORateLimiter,
+)
 from telegram_handler.buffer import MessageBuffer
 from telegram_handler.consts import (
     MAX_MESSAGE_SIZE,
@@ -55,7 +58,17 @@ class TelegramLoggingHandler(logging.Handler):
 
     def __init__(self, bot_token, chat_id, level=logging.NOTSET):
         super().__init__(level)
-        self.bot = Bot(bot_token)
+        self.application = (
+            ApplicationBuilder()
+            .token(bot_token)
+            .read_timeout(120)
+            .write_timeout(120)
+            .concurrent_updates(True)
+            .rate_limiter(AIORateLimiter(max_retries=5))
+            .http_version("1.1")
+            .get_updates_http_version("1.1")
+            .build()
+        )
         self.chat_id = chat_id
         self._buffer = MessageBuffer(MAX_BUFFER_SIZE)
         self._stop_event = Event()
@@ -78,7 +91,9 @@ class TelegramLoggingHandler(logging.Handler):
 
     async def async_send_message(self, message):
         try:
-            await self.bot.send_message(chat_id=self.chat_id, text=message, parse_mode='HTML')
+            await self.application.bot.send_message(
+                chat_id=self.chat_id, text=message, parse_mode="HTML"
+            )
         except Exception as e:
             logging.error(f"Failed to send message: {e}")
 
