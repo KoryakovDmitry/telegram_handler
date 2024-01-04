@@ -58,17 +58,7 @@ class TelegramLoggingHandler(logging.Handler):
 
     def __init__(self, bot_token, chat_id, level=logging.NOTSET):
         super().__init__(level)
-        self.application = (
-            ApplicationBuilder()
-            .token(bot_token)
-            .read_timeout(120)
-            .write_timeout(120)
-            .concurrent_updates(True)
-            .rate_limiter(AIORateLimiter(max_retries=5))
-            .http_version("1.1")
-            .get_updates_http_version("1.1")
-            .build()
-        )
+        self.__bot_token = bot_token
         self.chat_id = chat_id
         self._buffer = MessageBuffer(MAX_BUFFER_SIZE)
         self._stop_event = Event()
@@ -91,7 +81,18 @@ class TelegramLoggingHandler(logging.Handler):
 
     async def async_send_message(self, message):
         try:
-            await self.application.bot.send_message(
+            application = (
+                ApplicationBuilder()
+                .token(self.__bot_token)
+                .read_timeout(120)
+                .write_timeout(120)
+                .concurrent_updates(True)
+                .rate_limiter(AIORateLimiter(max_retries=5))
+                .http_version("1.1")
+                .get_updates_http_version("1.1")
+                .build()
+            )
+            await application.bot.send_message(
                 chat_id=self.chat_id, text=message, parse_mode="HTML"
             )
         except Exception as e:
